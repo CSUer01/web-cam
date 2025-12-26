@@ -2,65 +2,70 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>监控后台 - 稳定版</title>
+    <title>控制台 - 音频监听</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { background: #000; color: #00ff00; font-family: monospace; text-align: center; padding: 20px; }
-        #video-container { width: 90%; max-width: 800px; margin: 20px auto; border: 2px solid #222; background: #050505; min-height: 400px; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer; }
-        video { width: 100%; height: auto; display: block; }
-        .controls { margin: 20px; }
-        button { background: #00ff00; border: none; padding: 15px 35px; font-weight: bold; cursor: pointer; font-size: 1rem; border-radius: 5px; }
-        #status-info { color: #ffcc00; margin: 10px; font-size: 0.9rem; }
+        body { background: #000; color: #00ff00; font-family: 'Courier New', monospace; text-align: center; padding: 40px; }
+        .box { border: 1px solid #222; padding: 30px; background: #050505; max-width: 500px; margin: auto; }
+        #v-meter { width: 100%; height: 10px; background: #111; margin: 20px 0; border-radius: 5px; overflow: hidden; }
+        #v-bar { width: 0%; height: 100%; background: linear-gradient(90deg, #004400, #00ff00); transition: width 0.1s; }
+        button { background: #00ff00; color: #000; border: none; padding: 15px 40px; font-weight: bold; cursor: pointer; border-radius: 4px; }
+        #log { margin-top: 20px; font-size: 0.8rem; color: #444; }
     </style>
 </head>
 <body>
-    <h2>LIVE STREAMING</h2>
-    <div id="status-info">系统就绪</div>
+    <div class="box">
+        <h3>AUDIO FEED</h3>
+        <div id="status">等待呼叫...</div>
+        
+        <div id="v-meter"><div id="v-bar"></div></div>
+        <p style="font-size: 0.7rem; color: #333;">音频波动监测</p>
 
-    <div id="video-container" onclick="forcePlay()">
-        <video id="remoteVideo" autoplay playsinline muted></video>
-        <p id="tip" style="position: absolute; color: #444;">[ 暂无信号 ]</p>
+        <button onclick="listen()">📡 开启远程监听</button>
     </div>
+    <div id="log">日志等待中...</div>
 
-    <div class="controls">
-        <button onclick="connect()">📡 连接远程手机</button>
-    </div>
+    <audio id="remoteAudio" autoplay></audio>
 
     <script>
-        const targetID = 'my_secret_cam_9988';
-        // 国内优化版 Peer 配置
+        const targetID = 'my_secret_mic_8899';
         const peer = new Peer({
             config: { 'iceServers': [
                 { urls: 'stun:stun.anyfirewall.com:3478' },
-                { urls: 'stun:stun.stunprotocol.org:3478' },
-                { urls: 'stun:stun.l.google.com:19302' }
+                { urls: 'stun:stun.stunprotocol.org:3478' }
             ]}
         });
 
-        const video = document.getElementById('remoteVideo');
-
-        function connect() {
-            document.getElementById('status-info').innerText = "呼叫中...";
-            const canvas = document.createElement('canvas');
-            const stream = canvas.captureStream();
-            const call = peer.call(targetID, stream);
+        function listen() {
+            document.getElementById('status').innerText = "呼叫中...";
+            // 发起虚假流以触发握手
+            const call = peer.call(targetID, new AudioContext().createMediaStreamDestination().stream);
 
             call.on('stream', (remoteStream) => {
-                document.getElementById('status-info').innerText = "🟢 信号已接通";
-                document.getElementById('tip').style.display = 'none';
-                video.srcObject = remoteStream;
-                video.play().catch(() => {
-                    document.getElementById('status-info').innerText = "🟡 请点击下方黑框激活画面";
-                });
+                document.getElementById('status').innerText = "🟢 监听成功";
+                const audio = document.getElementById('remoteAudio');
+                audio.srcObject = remoteStream;
+                audio.play();
+
+                // 音量跳动逻辑
+                const ctx = new AudioContext();
+                const src = ctx.createMediaStreamSource(remoteStream);
+                const ana = ctx.createAnalyser();
+                src.connect(ana);
+                const data = new Uint8Array(ana.frequencyBinCount);
+                
+                function updateMeter() {
+                    ana.getByteFrequencyData(data);
+                    let val = data.reduce((a, b) => a + b, 0) / data.length;
+                    document.getElementById('v-bar').style.width = Math.min(val * 3, 100) + "%";
+                    requestAnimationFrame(updateMeter);
+                }
+                updateMeter();
+                addLog("成功接收音频流");
             });
         }
 
-        function forcePlay() {
-            if(video.srcObject) {
-                video.play();
-                document.getElementById('status-info').innerText = "🟢 画面已激活";
-            }
-        }
+        function addLog(m) { document.getElementById('log').innerText = "[" + new Date().toLocaleTimeString() + "] " + m; }
     </script>
 </body>
 </html>
