@@ -2,71 +2,65 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>远程监控控制台 - 画面修复版</title>
+    <title>监控后台 - 稳定版</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { background: #000; color: #00ff00; font-family: monospace; text-align: center; margin: 0; padding: 20px; }
-        #video-container { 
-            width: 90%; max-width: 800px; margin: auto; border: 1px solid #333; 
-            background: #111; min-height: 400px; display: flex; align-items: center; justify-content: center;
-        }
+        body { background: #000; color: #00ff00; font-family: monospace; text-align: center; padding: 20px; }
+        #video-container { width: 90%; max-width: 800px; margin: 20px auto; border: 2px solid #222; background: #050505; min-height: 400px; display: flex; align-items: center; justify-content: center; position: relative; cursor: pointer; }
         video { width: 100%; height: auto; display: block; }
         .controls { margin: 20px; }
-        button { background: #00ff00; color: #000; padding: 15px 30px; border: none; font-weight: bold; cursor: pointer; }
-        #status { color: #ffcc00; margin: 10px; }
+        button { background: #00ff00; border: none; padding: 15px 35px; font-weight: bold; cursor: pointer; font-size: 1rem; border-radius: 5px; }
+        #status-info { color: #ffcc00; margin: 10px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
-    <h2>LIVE STREAM</h2>
-    <div id="status">系统准备就绪</div>
+    <h2>LIVE STREAMING</h2>
+    <div id="status-info">系统就绪</div>
 
-    <div id="video-container" onclick="manualPlay()">
+    <div id="video-container" onclick="forcePlay()">
         <video id="remoteVideo" autoplay playsinline muted></video>
-        <div id="placeholder" style="position: absolute;">等待画面传输...<br>(若握手成功后仍黑屏，请点击此处)</div>
+        <p id="tip" style="position: absolute; color: #444;">[ 暂无信号 ]</p>
     </div>
 
     <div class="controls">
-        <button onclick="startCall()">📡 开启远程监控</button>
+        <button onclick="connect()">📡 连接远程手机</button>
     </div>
 
     <script>
-        const targetID = 'my_secret_cam_9988'; // 请确认与手机端一致
-        const peer = new Peer();
+        const targetID = 'my_secret_cam_9988';
+        // 国内优化版 Peer 配置
+        const peer = new Peer({
+            config: { 'iceServers': [
+                { urls: 'stun:stun.anyfirewall.com:3478' },
+                { urls: 'stun:stun.stunprotocol.org:3478' },
+                { urls: 'stun:stun.l.google.com:19302' }
+            ]}
+        });
+
         const video = document.getElementById('remoteVideo');
 
-        function startCall() {
-            document.getElementById('status').innerText = "正在尝试连接手机...";
-            
-            // 随便弄个空流去骗过 WebRTC 握手协议
+        function connect() {
+            document.getElementById('status-info').innerText = "呼叫中...";
             const canvas = document.createElement('canvas');
             const stream = canvas.captureStream();
-
             const call = peer.call(targetID, stream);
-            
+
             call.on('stream', (remoteStream) => {
-                document.getElementById('status').innerText = "🟢 已接收到信号，正在解码...";
-                document.getElementById('placeholder').style.display = 'none';
-                
+                document.getElementById('status-info').innerText = "🟢 信号已接通";
+                document.getElementById('tip').style.display = 'none';
                 video.srcObject = remoteStream;
-                
-                // 核心修复：反复尝试播放，直到画面出来
-                const playPromise = video.play();
-                if (playPromise !== undefined) {
-                    playPromise.catch(() => {
-                        document.getElementById('status').innerText = "🟡 浏览器拦截了自动播放，请点击下方黑色区域";
-                    });
-                }
+                video.play().catch(() => {
+                    document.getElementById('status-info').innerText = "🟡 请点击下方黑框激活画面";
+                });
             });
         }
 
-        function manualPlay() {
-            video.play();
-            document.getElementById('status').innerText = "🟢 已手动激活画面";
+        function forcePlay() {
+            if(video.srcObject) {
+                video.play();
+                document.getElementById('status-info').innerText = "🟢 画面已激活";
+            }
         }
-
-        peer.on('error', (err) => {
-            document.getElementById('status').innerText = "🔴 连接失败: " + err.type;
-        });
     </script>
 </body>
 </html>
