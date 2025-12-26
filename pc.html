@@ -1,31 +1,100 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <title>监控后台</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>远程监控控制台</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { background: #000; color: #00ff00; font-family: 'Courier New', monospace; text-align: center; padding: 20px; }
+        .monitor-box { width: 90%; max-width: 900px; margin: 20px auto; border: 2px solid #333; box-shadow: 0 0 20px rgba(0,255,0,0.4); position: relative; background: #111; }
+        video { width: 100%; display: block; border-radius: 4px; }
+        .controls { margin-top: 20px; background: #1a1a1a; padding: 25px; border-radius: 10px; border: 1px solid #333; }
+        #status-bar { margin-bottom: 15px; font-size: 1.2rem; color: #ffcc00; text-shadow: 0 0 5px #ffcc00; }
+        button { background: #00ff00; color: #000; border: none; padding: 15px 40px; font-size: 1.2rem; font-weight: bold; cursor: pointer; border-radius: 5px; box-shadow: 0 0 10px #00ff00; transition: 0.2s; }
+        button:active { transform: scale(0.95); box-shadow: 0 0 2px #00ff00; }
+        .log { margin-top: 20px; font-size: 0.85rem; color: #888; text-align: left; max-width: 900px; margin: 20px auto; padding: 10px; background: #0a0a0a; border: 1px solid #222; overflow-y: auto; height: 100px; }
+    </style>
 </head>
-<body style="background: #222; color: white; text-align: center;">
-    <h2>实时监控画面</h2>
-    <video id="remoteVideo" autoplay style="width: 80%; border: 2px solid red;"></video>
-    <br><br>
-    <button onclick="connectToPhone()" style="padding: 10px 20px;">开始连接手机</button>
+<body>
+
+    <h1 style="letter-spacing: 5px;">SYSTEM MONITORING v1.0</h1>
+    
+    <div id="status-bar">等待系统启动...</div>
+
+    <div class="monitor-box">
+        <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+
+    <div class="controls">
+        <p style="color: #888; margin-bottom: 10px;">确保手机端网页已开启</p>
+        <button onclick="connectToPhone()">📡 发起远程连接</button>
+    </div>
+
+    <div class="log" id="logBox">终端日志: [系统就绪]</div>
 
     <script>
-        const peer = new Peer(); // 电脑端 ID 随机即可
+        /*************************************************
+         * 重要配置：请确保这里的 ID 与你手机端 index.html 里的完全一致
+         *************************************************/
+        const targetPhoneId = 'my_secret_cam_9988'; 
 
-        function connectToPhone() {
-            // 呼叫你在手机端设置的 ID
-            const call = peer.call('my_secret_phone_123', navigator.mediaDevices.getUserMedia({video:true}).then(s=>s)); 
-            
-            // 注意：这里我们其实不需要电脑摄像头，直接发起请求即可
-            const dummyCanvas = document.createElement('canvas');
-            const stream = dummyCanvas.captureStream();
-            const outgoingCall = peer.call('my_secret_phone_123', stream);
+        const logBox = document.getElementById('logBox');
+        const statusBar = document.getElementById('status-bar');
+        const remoteVideo = document.getElementById('remoteVideo');
 
-            outgoingCall.on('stream', remoteStream => {
-                document.getElementById('remoteVideo').srcObject = remoteStream;
-            });
+        // 1. 初始化 Peer 对象
+        const peer = new Peer();
+
+        peer.on('open', (id) => {
+            statusBar.innerText = "系统就绪 | 本机ID: " + id;
+            addLog("[OK] 成功连接至 Peer 信令服务器");
+        });
+
+        // 2. 连接函数
+        async function connectToPhone() {
+            statusBar.innerText = "正在呼叫手机端...";
+            addLog("[INFO] 尝试寻找目标 ID: " + targetPhoneId);
+
+            try {
+                // 创建一个虚拟流用于握手
+                const canvas = document.createElement('canvas');
+                canvas.width = canvas.height = 1;
+                const stream = canvas.captureStream();
+
+                // 发起呼叫请求
+                const call = peer.call(targetPhoneId, stream);
+
+                // 监听对方回传的视频流
+                call.on('stream', (remoteStream) => {
+                    statusBar.innerText = "🟢 实时监控中";
+                    statusBar.style.color = "#00ff00";
+                    remoteVideo.srcObject = remoteStream;
+                    addLog("[SUCCESS] 握手成功，视频传输中");
+                });
+
+            } catch (err) {
+                statusBar.innerText = "🔴 呼叫过程异常";
+                addLog("[ERROR] " + err.message);
+            }
         }
+
+        // 辅助：日志记录
+        function addLog(msg) {
+            const time = new Date().toLocaleTimeString();
+            logBox.innerText += `\n[${time}] ${msg}`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        // 错误监控
+        peer.on('error', (err) => {
+            if(err.type === 'peer-unavailable') {
+                statusBar.innerText = "🔴 无法连接：目标手机不在线";
+                addLog("[ERR] 找不到 ID，请检查手机是否打开了网页");
+            } else {
+                addLog("[ERR] 类型: " + err.type);
+            }
+        });
     </script>
 </body>
 </html>
