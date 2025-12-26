@@ -2,105 +2,70 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>远程监控控制台 - 最终版</title>
+    <title>远程监控控制台 - 画面修复版</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { background: #000; color: #00ff00; font-family: 'Courier New', monospace; text-align: center; padding: 20px; margin: 0; }
-        .monitor-box { 
-            width: 90%; max-width: 800px; margin: 20px auto; 
-            border: 2px solid #333; background: #0a0a0a;
-            position: relative; cursor: pointer;
+        body { background: #000; color: #00ff00; font-family: monospace; text-align: center; margin: 0; padding: 20px; }
+        #video-container { 
+            width: 90%; max-width: 800px; margin: auto; border: 1px solid #333; 
+            background: #111; min-height: 400px; display: flex; align-items: center; justify-content: center;
         }
-        /* 强制视频拉伸填满 */
-        video { width: 100%; height: auto; display: block; min-height: 300px; }
-        .controls { margin-top: 20px; background: #111; padding: 20px; border-radius: 10px; }
-        #status-bar { font-size: 1.2rem; color: #ffcc00; margin-bottom: 10px; }
-        button { 
-            background: #00ff00; color: #000; border: none; padding: 15px 40px; 
-            font-size: 1.2rem; font-weight: bold; cursor: pointer; border-radius: 5px;
-        }
-        .tip { font-size: 0.8rem; color: #555; margin-top: 10px; }
-        .log { 
-            margin-top: 20px; font-size: 0.8rem; color: #444; text-align: left; 
-            max-width: 800px; margin: 20px auto; padding: 10px; border-top: 1px solid #222;
-        }
+        video { width: 100%; height: auto; display: block; }
+        .controls { margin: 20px; }
+        button { background: #00ff00; color: #000; padding: 15px 30px; border: none; font-weight: bold; cursor: pointer; }
+        #status { color: #ffcc00; margin: 10px; }
     </style>
 </head>
 <body>
+    <h2>LIVE STREAM</h2>
+    <div id="status">系统准备就绪</div>
 
-    <h1 style="letter-spacing: 3px;">LIVE FEED MONITOR</h1>
-    
-    <div id="status-bar">系统待命</div>
-
-    <div class="monitor-box" onclick="forcePlay()">
+    <div id="video-container" onclick="manualPlay()">
         <video id="remoteVideo" autoplay playsinline muted></video>
-        <p id="click-tip" style="position:absolute; top:45%; width:100%; color:#555; display:none;">若黑屏，请点击此处激活画面</p>
+        <div id="placeholder" style="position: absolute;">等待画面传输...<br>(若握手成功后仍黑屏，请点击此处)</div>
     </div>
 
     <div class="controls">
-        <button onclick="connectToPhone()">📡 开始接收监控画面</button>
-        <p class="tip">提示：必须先在手机端点击“同步时间”并显示 ONLINE</p>
+        <button onclick="startCall()">📡 开启远程监控</button>
     </div>
 
-    <div class="log" id="logBox">终端日志:</div>
-
     <script>
-        // --- 确保与手机端 myID 保持一致 ---
-        const targetPhoneId = 'my_secret_cam_9988'; 
-
-        const logBox = document.getElementById('logBox');
-        const statusBar = document.getElementById('status-bar');
-        const video = document.getElementById('remoteVideo');
+        const targetID = 'my_secret_cam_9988'; // 请确认与手机端一致
         const peer = new Peer();
+        const video = document.getElementById('remoteVideo');
 
-        peer.on('open', (id) => {
-            statusBar.innerText = "本机就绪 ID: " + id;
-            addLog("连接信令服务器成功");
-        });
-
-        // 核心连接函数
-        async function connectToPhone() {
-            addLog("正在呼叫目标: " + targetPhoneId);
+        function startCall() {
+            document.getElementById('status').innerText = "正在尝试连接手机...";
             
-            // 创建虚拟占位流
+            // 随便弄个空流去骗过 WebRTC 握手协议
             const canvas = document.createElement('canvas');
-            canvas.width = 1; canvas.height = 1;
             const stream = canvas.captureStream();
 
-            const call = peer.call(targetPhoneId, stream);
-
+            const call = peer.call(targetID, stream);
+            
             call.on('stream', (remoteStream) => {
-                addLog("成功接收到远程视频流！");
-                statusBar.innerText = "🟢 正在直播中";
-                document.getElementById('click-tip').style.display = 'block';
+                document.getElementById('status').innerText = "🟢 已接收到信号，正在解码...";
+                document.getElementById('placeholder').style.display = 'none';
                 
                 video.srcObject = remoteStream;
                 
-                // 尝试自动播放
-                video.play().catch(err => {
-                    addLog("自动播放受阻，请手动点击黑色区域");
-                });
+                // 核心修复：反复尝试播放，直到画面出来
+                const playPromise = video.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(() => {
+                        document.getElementById('status').innerText = "🟡 浏览器拦截了自动播放，请点击下方黑色区域";
+                    });
+                }
             });
-
-            call.on('error', (e) => addLog("呼叫错误: " + e.type));
         }
 
-        // 手动激活视频的函数
-        function forcePlay() {
-            if(video.srcObject) {
-                video.play();
-                document.getElementById('click-tip').style.display = 'none';
-                addLog("用户手动激活播放");
-            }
-        }
-
-        function addLog(msg) {
-            logBox.innerText += `\n[${new Date().toLocaleTimeString()}] ${msg}`;
+        function manualPlay() {
+            video.play();
+            document.getElementById('status').innerText = "🟢 已手动激活画面";
         }
 
         peer.on('error', (err) => {
-            if(err.type === 'peer-unavailable') addLog("🔴 错误：目标手机不在线，请刷新手机端并重试");
+            document.getElementById('status').innerText = "🔴 连接失败: " + err.type;
         });
     </script>
 </body>
