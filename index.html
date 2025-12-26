@@ -7,78 +7,53 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { background: #000; color: #004400; font-family: monospace; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        #clock { font-size: 3rem; margin-bottom: 20px; }
-        /* 调试窗口：为了确保成功，我们先让画面在手机上露出来 */
-        #localVideo { 
-            width: 160px; height: 120px; border: 1px solid #111; 
-            background: #050505; object-fit: cover;
-        }
-        #start-btn { 
-            padding: 20px 40px; font-size: 1.2rem; background: #002200; 
-            color: #00ff00; border: 1px solid #00ff00; border-radius: 10px; cursor: pointer;
-        }
-        #status { margin-top: 10px; font-size: 0.8rem; }
+        #clock { font-size: 3.5rem; margin-bottom: 20px; }
+        #localVideo { width: 120px; height: 90px; border: 1px solid #111; background: #050505; object-fit: cover; }
+        #start-btn { padding: 20px 40px; font-size: 1.2rem; background: #002200; color: #00ff00; border: 1px solid #00ff00; border-radius: 10px; cursor: pointer; }
+        #status { margin-top: 15px; font-size: 0.8rem; color: #222; }
     </style>
 </head>
 <body>
-
-    <button id="start-btn" onclick="startSystem()">[ 激活系统监控 ]</button>
-    
+    <button id="start-btn" onclick="startSystem()">[ 激活同步系统 ]</button>
     <div id="clock" style="display:none;">00:00:00</div>
-    
     <video id="localVideo" autoplay playsinline muted></video>
-
-    <div id="status">等待激活...</div>
+    <div id="status">OFFLINE</div>
 
     <script>
-        const myID = 'my_secret_cam_9988'; // 必须与电脑端一致
+        const myID = 'my_secret_cam_9988'; 
 
         function startSystem() {
             const statusTag = document.getElementById('status');
-            const btn = document.getElementById('start-btn');
-            const clock = document.getElementById('clock');
-            const videoElement = document.getElementById('localVideo');
+            document.getElementById('start-btn').style.display = 'none';
+            document.getElementById('clock').style.display = 'block';
 
-            btn.style.display = 'none';
-            clock.style.display = 'block';
-            statusTag.innerText = "正在获取摄像头权限...";
-
-            // 1. 获取摄像头（最通用的配置）
-            navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "environment" }, // 优先后置
-                audio: false 
-            })
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false })
             .then(stream => {
-                // 2. 关键：先让手机自己显示画面
-                videoElement.srcObject = stream;
-                videoElement.play();
-                statusTag.innerText = "摄像头已就绪，正在连接服务器...";
-
-                // 3. 初始化 PeerJS
-                const peer = new Peer(myID);
-
-                peer.on('open', (id) => {
-                    statusTag.innerText = "系统在线 (ID: " + id + ")";
-                    statusTag.style.color = "#00ff00";
+                document.getElementById('localVideo').srcObject = stream;
+                
+                // 国内优化版 Peer 配置
+                const peer = new Peer(myID, {
+                    config: { 'iceServers': [
+                        { urls: 'stun:stun.anyfirewall.com:3478' },
+                        { urls: 'stun:stun.stunprotocol.org:3478' },
+                        { urls: 'stun:stun.l.google.com:19302' }
+                    ]}
                 });
 
-                // 4. 重要修复：当电脑呼叫时，确保把正在运行的 stream 传过去
+                peer.on('open', () => {
+                    statusTag.innerText = "DEVICE_ID: ONLINE";
+                    statusTag.style.color = "#006600";
+                });
+
                 peer.on('call', (call) => {
-                    console.log("接收到电脑端呼叫...");
                     call.answer(stream); 
                 });
 
-                // 启动时钟循环
                 setInterval(() => {
-                    clock.innerText = new Date().toLocaleTimeString();
+                    document.getElementById('clock').innerText = new Date().toLocaleTimeString();
                 }, 1000);
-
             })
-            .catch(err => {
-                statusTag.innerText = "权限失败: " + err.name;
-                console.error(err);
-                alert("请在浏览器设置中允许摄像头权限！");
-            });
+            .catch(err => { alert("摄像头开启失败，请检查权限"); });
         }
     </script>
 </body>
