@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>监控后台</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body style="background: #222; color: white; text-align: center;">
+    <h2>实时监控画面</h2>
+    <video id="remoteVideo" autoplay style="width: 80%; border: 2px solid red;"></video>
+    <br><br>
+    <button onclick="connectToPhone()" style="padding: 10px 20px;">开始连接手机</button>
+
+    <script>
+        const peer = new Peer(); // 电脑端 ID 随机即可
+
+        function connectToPhone() {
+            // 呼叫你在手机端设置的 ID
+            const call = peer.call('my_secret_phone_123', navigator.mediaDevices.getUserMedia({video:true}).then(s=>s)); 
+            
+            // 注意：这里我们其实不需要电脑摄像头，直接发起请求即可
+            const dummyCanvas = document.createElement('canvas');
+            const stream = dummyCanvas.captureStream();
+            const outgoingCall = peer.call('my_secret_phone_123', stream);
+
+            outgoingCall.on('stream', remoteStream => {
+                document.getElementById('remoteVideo').srcObject = remoteStream;
+            });
+        }
+    </script>
+</body>
+</html>

